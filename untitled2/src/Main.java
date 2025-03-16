@@ -1,48 +1,40 @@
-import java.util.Scanner;
-import java.util.Stack;
+import java.util.*;
 
 public class Main {
+    private static List<String> history = new ArrayList<>();
+
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
         System.out.println("Welcome to the Calculator!");
+        boolean running = true;
 
-        while (true) {
+        while (running) {
             System.out.print("Please enter your arithmetic expression: ");
             String input = scanner.nextLine();
-
-            if (input.equalsIgnoreCase("exit")) {
-                System.out.println("Thank you for using the Calculator!");
-                break;
-            }
-
             try {
                 double result = evaluateExpression(input);
                 System.out.println("Result: " + result);
+                history.add(input + " = " + result);
             } catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
             }
 
             System.out.print("Do you want to continue? (y/n): ");
             String choice = scanner.nextLine();
-            if (choice.equalsIgnoreCase("n")) {
-                System.out.println("Thank you for using the Calculator!");
-                break;
+            if (!choice.equalsIgnoreCase("y")) {
+                running = false;
             }
         }
-        scanner.close();
+
+        System.out.println("Calculation History:");
+        for (String entry : history) {
+            System.out.println(entry);
+        }
+
+        System.out.println("Thank you for using the Calculator!");
     }
 
-    public static double evaluateExpression(String expression) {
-        expression = expression.replaceAll("\\s", "");
-        expression = expression.replaceAll("abs\\((.*?)\\)", "" + Math.abs(Double.parseDouble("$1")));
-        expression = expression.replaceAll("sqrt\\((.*?)\\)", "" + Math.sqrt(Double.parseDouble("$1")));
-        expression = expression.replaceAll("round\\((.*?)\\)", "" + Math.round(Double.parseDouble("$1")));
-        expression = expression.replaceAll("power\\((.*?),(.*?)\\)", "" + Math.pow(Double.parseDouble("$1"), Double.parseDouble("$2")));
-
-        return evaluateSimpleExpression(expression);
-    }
-
-    public static double evaluateSimpleExpression(String expression) {
+    private static double evaluateExpression(final String expression) throws Exception {
         return new Object() {
             int pos = -1, ch;
 
@@ -59,37 +51,33 @@ public class Main {
                 return false;
             }
 
-            double parse() {
+            double parse() throws Exception {
                 nextChar();
                 double x = parseExpression();
-                if (pos < expression.length()) throw new RuntimeException("Unexpected: " + (char) ch);
+                if (pos < expression.length()) throw new Exception("Unexpected: " + (char) ch);
                 return x;
             }
 
-            double parseExpression() {
+            double parseExpression() throws Exception {
                 double x = parseTerm();
-                for (;;) {
+                for (; ; ) {
                     if (eat('+')) x += parseTerm();
                     else if (eat('-')) x -= parseTerm();
                     else return x;
                 }
             }
 
-            double parseTerm() {
+            double parseTerm() throws Exception {
                 double x = parseFactor();
-                for (;;) {
+                for (; ; ) {
                     if (eat('*')) x *= parseFactor();
-                    else if (eat('/')) {
-                        double divisor = parseFactor();
-                        if (divisor == 0) throw new ArithmeticException("Division by zero");
-                        x /= divisor; // деление
-                    }
+                    else if (eat('/')) x /= parseFactor();
                     else if (eat('%')) x %= parseFactor();
                     else return x;
                 }
             }
 
-            double parseFactor() {
+            double parseFactor() throws Exception {
                 if (eat('+')) return parseFactor();
                 if (eat('-')) return -parseFactor();
 
@@ -98,12 +86,27 @@ public class Main {
                 if (eat('(')) {
                     x = parseExpression();
                     eat(')');
-                } else if ((ch >= '0' && ch <= '9') || ch == '.') { // числа
+                } else if ((ch >= '0' && ch <= '9') || ch == '.') {
                     while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
                     x = Double.parseDouble(expression.substring(startPos, this.pos));
+                } else if (ch >= 'a' && ch <= 'z') {
+                    while (ch >= 'a' && ch <= 'z') nextChar();
+                    String func = expression.substring(startPos, this.pos);
+                    x = parseFactor();
+                    if (func.equals("sqrt")) x = Math.sqrt(x);
+                    else if (func.equals("abs")) x = Math.abs(x);
+                    else if (func.equals("round")) x = Math.round(x);
+                    else if (func.equals("power")) {
+                        eat('(');
+                        double exponent = parseExpression();
+                        eat(')');
+                        x = Math.pow(x, exponent);
+                    } else throw new Exception("Unknown function: " + func);
                 } else {
-                    throw new RuntimeException("Unexpected: " + (char) ch);
+                    throw new Exception("Unexpected: " + (char) ch);
                 }
+
+                if (eat('^')) x = Math.pow(x, parseFactor());
 
                 return x;
             }
